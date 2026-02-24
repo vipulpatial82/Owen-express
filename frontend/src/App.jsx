@@ -155,7 +155,7 @@ function App() {
                         </div>
                     </div>
                     <div className="text-center pt-6 mt-8 border-t border-white/10">
-                        <p className="text-gray-400">Made  by React Rebel</p>
+                        <p className="text-gray-400">Made  by vipul patial</p>
                     </div>
                 </footer>
             </div>
