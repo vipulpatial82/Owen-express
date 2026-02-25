@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaUser, FaEnvelope, FaLock, FaUserPlus } from 'react-icons/fa';
+import { API_URL } from '../config';
 
 const Signup = () => {
     const [name, setName] = useState('');
@@ -35,7 +36,7 @@ const Signup = () => {
         
         setLoading(true);
         try {
-            const res = await fetch('http://localhost:5000/api/users/signup', {
+            const res = await fetch(`${API_URL}/api/users/signup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, password })

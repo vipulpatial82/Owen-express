@@ -8,7 +8,10 @@ const orderRoutes = require('./routes/orderRoutes');
 const userRoutes = require('./routes/userRoutes');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: ['https://owen-express-bqeo-pvxkebvxd-vipulpatial82s-projects.vercel.app', 'https://owen-express-bqeo.vercel.app', 'http://localhost:5173'],
+    credentials: true
+}));
 app.use(express.json());
 
 mongoose.connect(process.env.MONGO_URI)
@@ -20,4 +23,8 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+}
+
+module.exports = app;

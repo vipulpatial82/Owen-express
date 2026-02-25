@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaShoppingBag, FaMapMarkerAlt, FaPhone, FaUser, FaClock, FaStar } from 'react-icons/fa';
+import { API_URL } from '../config';
 
 const btnStyle = "bg-red-600 text-white py-3 px-8 rounded-full font-bold hover:bg-red-700";
 
@@ -33,7 +34,7 @@ const OrderHistory = () => {
             }
 
             console.log('Fetching orders for email:', user.email);
-            fetch(`http://localhost:5000/api/orders/user/${user.email}`)
+            fetch(`${API_URL}/api/orders/user/${user.email}`)
                 .then(res => {
                     console.log('Response status:', res.status);
                     return res.json();
@@ -59,7 +60,7 @@ const OrderHistory = () => {
 
     const submitRating = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/api/orders/${ratingModal.orderId}/rate`, {
+            const res = await fetch(`${API_URL}/api/orders/${ratingModal.orderId}/rate`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ rating: ratingModal.rating, review: ratingModal.review })

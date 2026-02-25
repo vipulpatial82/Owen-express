@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import ItemList from '../components/ItemList';
+import { API_URL } from '../config';
 
 const Home = ({ cart, setCart }) => {
     const navigate = useNavigate();
@@ -13,7 +14,7 @@ const Home = ({ cart, setCart }) => {
 
     useEffect(() => {
         setLoading(true);
-        fetch('http://localhost:5000/api/items')
+        fetch(`${API_URL}/api/items`)
             .then(res => res.json())
             .then(data => {
                 setMenuItems(data);

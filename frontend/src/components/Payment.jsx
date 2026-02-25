@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FaCreditCard, FaMoneyBillWave, FaMobileAlt, FaCheckCircle } from 'react-icons/fa';
+import { API_URL } from '../config';
 
 const paymentOptions = [
     { id: 'upi', name: 'UPI Payment', icon: FaMobileAlt },
@@ -34,7 +35,7 @@ const Payment = ({ clearCart }) => {
         }
         
         try {
-            const res = await fetch('http://localhost:5000/api/orders/payment', {
+            const res = await fetch(`${API_URL}/api/orders/payment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

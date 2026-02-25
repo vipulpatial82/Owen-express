@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaStar, FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
+import { API_URL } from '../config';
 
 const Admin = () => {
     const [items, setItems] = useState([]);
@@ -24,7 +25,7 @@ const Admin = () => {
     }, [navigate]);
 
     const fetchItems = () => {
-        fetch('http://localhost:5000/api/items')
+        fetch(`${API_URL}/api/items`)
             .then(res => res.json())
             .then(data => setItems(data))
             .catch(err => console.error(err));
@@ -44,7 +45,7 @@ const Admin = () => {
                 formData.append('image', image);
             }
 
-            const url = editingId ? `http://localhost:5000/api/items/${editingId}` : 'http://localhost:5000/api/items';
+            const url = editingId ? `${API_URL}/api/items/${editingId}` : `${API_URL}/api/items`;
             const method = editingId ? 'PUT' : 'POST';
 
             const response = await fetch(url, {
@@ -72,7 +73,7 @@ const Admin = () => {
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this item?')) {
             try {
-                const response = await fetch(`http://localhost:5000/api/items/${id}`, {
+                const response = await fetch(`${API_URL}/api/items/${id}`, {
                     method: 'DELETE'
                 });
                 if (response.ok) {
