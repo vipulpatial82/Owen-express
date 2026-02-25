@@ -16,8 +16,10 @@ const Showcase = ({ isLoggedIn }) => {
         fetch(`${API_URL}/api/items`)
             .then(res => res.json())
             .then(data => {
-                const chefSpecials = data.filter(item => item.isChefSpecial);
-                setFeaturedItems(chefSpecials.length > 0 ? chefSpecials.slice(0, 3) : data.slice(0, 3));
+                if (Array.isArray(data)) {
+                    const chefSpecials = data.filter(item => item.isChefSpecial);
+                    setFeaturedItems(chefSpecials.length > 0 ? chefSpecials.slice(0, 3) : data.slice(0, 3));
+                }
                 setLoading(false);
             })
             .catch(err => {
@@ -33,8 +35,8 @@ const Showcase = ({ isLoggedIn }) => {
     return (
         <div>
             <section className="relative bg-gradient-to-r from-orange-500 to-red-600 text-white py-24 px-8 text-center rounded-2xl mb-12 shadow-xl overflow-hidden">
-                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/backimg.jpg')" }}></div>
-                <div className="absolute inset-0 bg-black opacity-50"></div>
+                <div className="absolute inset-0 bg-black opacity-60"></div>
+                <div className="absolute inset-0 bg-cover bg-center opacity-70" style={{ backgroundImage: "url('/images/backimg.jpg')" }}></div>
                 <div className="relative z-10">
                     <h1 className="text-5xl md:text-6xl font-extrabold mb-4 drop-shadow-lg">Authentic Indian Cuisine</h1>
                     <p className="text-2xl  mb-8 opacity-95 font-bold">Experience the rich flavors of traditional Indian cooking</p>
@@ -65,9 +67,9 @@ const Showcase = ({ isLoggedIn }) => {
                                     transform: flipped[item._id] ? 'rotateY(180deg)' : 'rotateY(0deg)'
                                 }}
                             >
-                                {/* Front */}
+                          {/* fornt */}
                                 <div 
-                                    className="absolute w-full h-full bg-white rounded-xl overflow-hidden shadow-lg hover:-translate-y-1 transition-transform cursor-pointer border-0"
+                                    className="absolute w-full h-full bg-white rounded-xl overflow-hidden shadow-lg hover:-translate-y-1 transition-transform cursor-pointer"
                                     style={{ backfaceVisibility: 'hidden' }}
                                     onClick={() => toggleFlip(item._id)}
                                 >
@@ -75,19 +77,14 @@ const Showcase = ({ isLoggedIn }) => {
                                     <div className="p-5">
                                         <div className="flex items-center justify-between mb-2">
                                             <h3 className="text-xl font-semibold">{item.name}</h3>
-                                            <div className="flex items-center gap-2">
-                                                {item.isChefSpecial && <FaStar className="text-orange-500" />}
-                                                <span className={`w-5 h-5 border-2 flex items-center justify-center ${item.type === 'veg' ? 'border-green-600' : 'border-red-600'}`}>
-                                                    <span className={`w-2.5 h-2.5 rounded-full ${item.type === 'veg' ? 'bg-green-600' : 'bg-red-600'}`}></span>
-                                                </span>
-                                            </div>
+                                            <span className={`w-5 h-5 border-2 flex items-center justify-center ${item.type === 'veg' ? 'border-green-600' : 'border-red-600'}`}>
+                                                <span className={`w-2.5 h-2.5 rounded-full ${item.type === 'veg' ? 'bg-green-600' : 'bg-red-600'}`}></span>
+                                            </span>
                                         </div>
                                         <p className="text-gray-600 mb-3">{item.description}</p>
-                                        <span className="text-xl font-bold text-orange-500">Price:₹{item.price}</span>
-                                    </div>
-                                    <hr className="border-gray-300 w-full" />
-                                    <div className="px-5 pb-5 pt-3">
-                                        <p className="text-md text-black text-center">Click to see ingredients</p>
+                                        <span className="text-xl font-bold text-orange-500">₹{item.price}</span>
+                                        <hr className="border-gray-300 w-full mt-3" />
+                                        <p className="text-md text-black mt-3 text-center">Click to see ingredients</p>
                                     </div>
                                 </div>
 
