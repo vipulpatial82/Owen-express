@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaStar } from 'react-icons/fa';
+import { API_URL } from '../config';
 
 const btnStyle = "bg-white text-red-600 px-8 py-4 rounded-full font-semibold hover:bg-gray-100 hover:scale-105 shadow-lg";
 
@@ -12,7 +13,7 @@ const Showcase = ({ isLoggedIn }) => {
 
     useEffect(() => {
         setLoading(true);
-        fetch('http://localhost:5000/api/items')
+        fetch(`${API_URL}/api/items`)
             .then(res => res.json())
             .then(data => {
                 const chefSpecials = data.filter(item => item.isChefSpecial);
