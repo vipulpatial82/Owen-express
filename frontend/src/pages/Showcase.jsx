@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaStar } from 'react-icons/fa';
 import { API_URL } from '../config';
 
 const btnStyle = "bg-white text-red-600 px-8 py-4 rounded-full font-semibold hover:bg-gray-100 hover:scale-105 shadow-lg";
