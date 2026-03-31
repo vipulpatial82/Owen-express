@@ -1,0 +1,12 @@
+name: Keep Render App Awake
+on:
+  schedule:
+    - cron: "*/14 * * * *"   # every 14 minutes
+  workflow_dispatch:          # allows manual trigger
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render App
+        run: |
+          curl -X GET https://owen-express-backend.onrender.com/health
