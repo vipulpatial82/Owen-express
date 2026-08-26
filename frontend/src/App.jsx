@@ -13,6 +13,7 @@ import Admin from './pages/Admin';
 import OrderHistory from './pages/OrderHistory';
 import OrderTracking from './pages/OrderTracking';
 import ProtectedRoute from './components/ProtectedRoute';
+import WelcomeBanner from './components/WelcomeBanner';
 
 function Header({ cartCount, isLoggedIn, onLogout, userName, isAdmin }) {
     const nav = useNavigate();
@@ -223,6 +224,8 @@ function App() {
                 <main className="flex-1 p-4 sm:p-8 max-w-7xl mx-auto w-full mt-28 relative z-10">
                     <AnimatedRoutes cart={cart} setCart={setCart} removeFromCart={removeFromCart} clearCart={clearCart} isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} setIsAdmin={setIsAdmin} setUserName={setUserName} />
                 </main>
+
+                <WelcomeBanner isLoggedIn={isLoggedIn} />
 
                 <footer className="bg-gray-950 text-white pt-20 pb-12 px-8 mt-auto relative overflow-hidden border-t border-gray-800">
                     <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 relative z-10">

@@ -7,5 +7,6 @@ router.post('/signup', userController.signup);
 router.post('/login', userController.login);
 router.post('/google', userController.googleAuth);
 router.get('/verify', verifyToken, userController.verifyAuth);
+router.put('/dismiss-welcome-coupon', verifyToken, userController.dismissWelcomeCoupon);
 
 module.exports = router;

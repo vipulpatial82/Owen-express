@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaShoppingCart, FaTrash, FaPlus, FaMinus } from 'react-icons/fa';
+import { FaShoppingCart, FaTrash, FaPlus, FaMinus, FaTag } from 'react-icons/fa';
+import { API_URL } from '../config';
 
 const OrderForm = ({ cart, removeFromCart, setCart }) => {
     const navigate = useNavigate();
@@ -8,6 +9,47 @@ const OrderForm = ({ cart, removeFromCart, setCart }) => {
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
     const [error, setError] = useState('');
+    const [couponCode, setCouponCode] = useState('');
+    const [discountAmount, setDiscountAmount] = useState(0);
+    const [couponApplied, setCouponApplied] = useState('');
+    const [couponError, setCouponError] = useState('');
+    const [couponSuccess, setCouponSuccess] = useState('');
+
+    const userStr = localStorage.getItem('user');
+    let user = null;
+    try { if (userStr) user = JSON.parse(userStr); } catch {}
+
+    const handleApplyCoupon = async () => {
+        setCouponError('');
+        setCouponSuccess('');
+        if (!couponCode.trim()) return;
+
+        try {
+            const res = await fetch(`${API_URL}/api/coupons/validate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: couponCode, subtotal: total, email: user?.email || '' })
+            });
+            const data = await res.json();
+            if (res.ok && data.isValid) {
+                setDiscountAmount(data.discountAmount);
+                setCouponApplied(data.code);
+                setCouponSuccess(`Coupon applied! You saved ₹${data.discountAmount}.`);
+                setCouponCode('');
+            } else {
+                setCouponError(data.error || 'Failed to validate coupon');
+            }
+        } catch (err) {
+            setCouponError('Error connecting to validation service');
+        }
+    };
+
+    const handleRemoveCoupon = () => {
+        setDiscountAmount(0);
+        setCouponApplied('');
+        setCouponSuccess('');
+        setCouponError('');
+    };
 
     const grouped = cart.reduce((acc, item) => {
         const found = acc.find(i => i._id === item._id);
@@ -16,6 +58,31 @@ const OrderForm = ({ cart, removeFromCart, setCart }) => {
     }, []);
 
     const total = cart.reduce((sum, item) => sum + item.price, 0);
+
+    useEffect(() => {
+        if (couponApplied) {
+            const revalidate = async () => {
+                try {
+                    const res = await fetch(`${API_URL}/api/coupons/validate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: couponApplied, subtotal: total, email: user?.email || '' })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.isValid) {
+                        setDiscountAmount(data.discountAmount);
+                        setCouponSuccess(`Coupon applied! You saved ₹${data.discountAmount}.`);
+                    } else {
+                        handleRemoveCoupon();
+                        setCouponError(data.error || 'Coupon removed because cart was updated');
+                    }
+                } catch {
+                    handleRemoveCoupon();
+                }
+            };
+            revalidate();
+        }
+    }, [total]);
 
     const increaseQty = (item) => setCart([...cart, item]);
     const decreaseQty = (item) => {
@@ -29,7 +96,16 @@ const OrderForm = ({ cart, removeFromCart, setCart }) => {
         setError('');
         if (!name || !address || !phone) return setError('Please fill all fields');
         if (!/^[6-9]\d{9}$/.test(phone)) return setError('Please enter a valid 10-digit Indian phone number starting with 6-9');
-        navigate('/payment', { state: { cart: grouped, total, address: { name, address, phone } } });
+        navigate('/payment', { 
+            state: { 
+                cart: grouped, 
+                total: total - discountAmount, 
+                subtotal: total, 
+                discountAmount, 
+                couponApplied, 
+                address: { name, address, phone } 
+            } 
+        });
     };
 
     return (
@@ -86,9 +162,81 @@ const OrderForm = ({ cart, removeFromCart, setCart }) => {
                                     </div>
                                 </div>
                             ))}
-                            <div className="mt-8 bg-gradient-to-r from-gray-50 to-white p-6 rounded-2xl border border-gray-200/50 shadow-inner flex justify-between items-center">
-                                <span className="text-lg font-bold text-gray-500 uppercase tracking-widest">Total</span>
-                                <span className="font-black text-4xl bg-gradient-to-r from-red-600 to-orange-500 bg-clip-text text-transparent">₹{total}</span>
+                            {/* Coupon Code Section */}
+                            <div className="mt-6 p-6 bg-white/50 border border-white rounded-2xl shadow-sm space-y-4">
+                                <div className="flex justify-between items-center mb-1">
+                                    <h4 className="font-black text-gray-800 text-sm flex items-center gap-2 uppercase tracking-wide">
+                                        <FaTag className="text-red-500 animate-pulse" /> Have a Coupon?
+                                    </h4>
+                                    {couponApplied && (
+                                        <span className="text-[10px] bg-green-500/10 text-green-600 font-bold px-2 py-0.5 rounded-full border border-green-500/20">
+                                            Applied
+                                        </span>
+                                    )}
+                                </div>
+
+                                {!couponApplied ? (
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Enter Promo Code (e.g. WELCOME10)"
+                                            value={couponCode}
+                                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                            className="flex-1 px-4 py-2.5 border-2 border-gray-100 rounded-xl text-sm focus:border-red-400 focus:outline-none bg-white transition-all uppercase placeholder-gray-400 font-black tracking-wider text-gray-800"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleApplyCoupon}
+                                            className="px-6 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-black hover:bg-red-600 hover:shadow-md transition-all shrink-0 active:scale-95"
+                                        >
+                                            Apply
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-between bg-green-500/5 border border-green-500/15 p-3.5 rounded-xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                                                <FaTag className="text-green-600" />
+                                            </div>
+                                            <div>
+                                                <span className="font-black text-sm text-green-800 tracking-wide">{couponApplied}</span>
+                                                <p className="text-[11px] text-green-600 font-bold">{couponSuccess}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleRemoveCoupon}
+                                            className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 hover:bg-red-100/80 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 border border-red-100"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                )}
+
+                                {couponError && (
+                                    <p className="text-red-600 text-xs font-bold bg-red-50 border border-red-100/50 p-3.5 rounded-xl">
+                                        ✕ {couponError}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Subtotal & Discount Breakdown */}
+                            <div className="mt-6 space-y-2.5 bg-gray-50/50 p-6 rounded-2xl border border-gray-200/40">
+                                <div className="flex justify-between items-center text-sm font-bold text-gray-500">
+                                    <span>Subtotal</span>
+                                    <span>₹{total}</span>
+                                </div>
+                                {discountAmount > 0 && (
+                                    <div className="flex justify-between items-center text-sm font-black text-green-600">
+                                        <span className="flex items-center gap-1.5"><FaTag size={12} /> Coupon ({couponApplied})</span>
+                                        <span>-₹{discountAmount}</span>
+                                    </div>
+                                )}
+                                <div className="h-[1px] bg-gray-200/80 my-2"></div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-lg font-bold text-gray-800 uppercase tracking-widest">Grand Total</span>
+                                    <span className="font-black text-4xl bg-gradient-to-r from-red-600 to-orange-500 bg-clip-text text-transparent">₹{total - discountAmount}</span>
+                                </div>
                             </div>
                         </div>
                     )}

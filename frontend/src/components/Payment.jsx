@@ -1,136 +1,256 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaCreditCard, FaMoneyBillWave, FaMobileAlt, FaCheckCircle } from 'react-icons/fa';
+import { FaMoneyBillWave, FaCreditCard, FaCheckCircle, FaArrowLeft, FaLock, FaShieldAlt } from 'react-icons/fa';
 import { API_URL } from '../config';
 import confetti from 'canvas-confetti';
+import { motion } from 'framer-motion';
 
-const paymentOptions = [
-    { id: 'upi', name: 'UPI Payment', icon: FaMobileAlt },
-    { id: 'credit', name: 'Credit Card', icon: FaCreditCard },
-    { id: 'cod', name: 'Cash on Delivery', icon: FaMoneyBillWave }
-];
+const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+        if (window.Razorpay) { resolve(true); return; }
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+    });
+};
 
 const Payment = ({ clearCart }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [selected, setSelected] = useState('upi');
-    const [paid, setPaid] = useState(false);
-    
+    const [selected, setSelected] = useState('online');
+    const [loading, setLoading] = useState(false);
+
     const { cart = [], address = {}, total = 0 } = location.state || {};
 
-    if (!cart.length && !paid) {
-        navigate('/menu');
-        return null;
-    }
+    useEffect(() => { loadRazorpayScript(); }, []);
 
-    const handlePay = async () => {
+    if (!cart.length) { navigate('/menu'); return null; }
+
+    const fireSuccess = (orderId) => {
+        clearCart();
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#ef4444', '#f97316', '#facc15', '#22c55e'] });
+        const orderData = { cart, total, address, paymentMethod: selected, placedAt: Date.now(), orderId };
+        localStorage.setItem('activeOrder', JSON.stringify(orderData));
+        
         const userStr = localStorage.getItem('user');
-        const token = localStorage.getItem('token');
-        let user = { email: '' };
+        if (userStr) {
+            try {
+                const userObj = JSON.parse(userStr);
+                if (userObj) {
+                    userObj.isNewUser = false;
+                    localStorage.setItem('user', JSON.stringify(userObj));
+                }
+            } catch (err) {}
+        }
+
+        navigate('/track', { state: orderData });
+    };
+
+    const handleCOD = async () => {
+        setLoading(true);
+        const userStr = localStorage.getItem('user');
+        let user = { email: 'demo@gmail.com', name: 'Demo User' };
         try { if (userStr) user = JSON.parse(userStr) || user; } catch { }
-
-        const fire = () => {
-            clearCart();
-            confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#ef4444', '#f97316', '#facc15', '#22c55e'] });
-            const orderData = { cart, total, address, paymentMethod: selected, placedAt: Date.now() };
-            localStorage.setItem('activeOrder', JSON.stringify(orderData));
-            navigate('/track', { state: orderData });
-        };
-
         try {
             const res = await fetch(`${API_URL}/api/orders/payment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: address.name, address: address.address, phone: address.phone, email: user?.email || '', cart, total, paymentMethod: selected })
+                body: JSON.stringify({ name: address.name, address: address.address, phone: address.phone, email: user.email, cart, total, paymentMethod: 'cod' })
             });
             const data = await res.json();
-            const orderId = data.order?._id;
-            clearCart();
-            confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#ef4444', '#f97316', '#facc15', '#22c55e'] });
-            const orderData = { cart, total, address, paymentMethod: selected, placedAt: Date.now(), orderId };
-            localStorage.setItem('activeOrder', JSON.stringify(orderData));
-            navigate('/track', { state: orderData });
-        } catch { fire(); }
+            fireSuccess(data.order?._id);
+        } catch { fireSuccess(null); }
+        setLoading(false);
     };
 
+    const handleRazorpay = async () => {
+        setLoading(true);
+        const userStr = localStorage.getItem('user');
+        let user = { email: 'demo@gmail.com', name: 'Demo User' };
+        try { if (userStr) user = JSON.parse(userStr) || user; } catch { }
+        try {
+            const res = await fetch(`${API_URL}/api/orders/razorpay/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ total })
+            });
+            const { orderId: razorpayOrderId, amount, currency, keyId } = await res.json();
+            const options = {
+                key: keyId,
+                amount,
+                currency,
+                name: 'Owen Express',
+                description: 'Food Order Payment',
+                order_id: razorpayOrderId,
+                prefill: { name: address.name || user.name, email: user.email, contact: address.phone },
+                theme: { color: '#dc2626' },
+                handler: async (response) => {
+                    try {
+                        const verifyRes = await fetch(`${API_URL}/api/orders/razorpay/verify`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature,
+                                name: address.name, address: address.address, phone: address.phone,
+                                email: user.email, cart, total, paymentMethod: 'online'
+                            })
+                        });
+                        const data = await verifyRes.json();
+                        fireSuccess(data.order?._id);
+                    } catch { fireSuccess(null); }
+                },
+                modal: { ondismiss: () => setLoading(false) }
+            };
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+        } catch { fireSuccess(null); setLoading(false); }
+    };
+
+    const handleProceed = () => {
+        if (selected === 'cod') handleCOD();
+        else handleRazorpay();
+    };
+
+    if (loading) return (
+        <div className="flex flex-col justify-center items-center min-h-[60vh] gap-4">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent"></div>
+            <p className="text-gray-600 font-black text-lg">Processing your order...</p>
+        </div>
+    );
+
     return (
-        <div className="max-w-3xl mx-auto my-8 sm:my-12 px-4 sm:px-0 relative z-10">
-            {/* Ambient background glows removed based on user feedback */}
+        <div className="max-w-3xl mx-auto my-6 sm:my-10 px-4 sm:px-0">
+            <motion.button 
+                whileHover={{ x: -4 }}
+                onClick={() => navigate('/order-summary')} 
+                className="flex items-center gap-2.5 px-6 py-3 bg-white text-gray-700 hover:text-red-600 rounded-xl font-bold transition-colors shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_25px_-4px_rgba(0,0,0,0.1)] mb-8 text-base"
+            >
+                <FaArrowLeft className="text-sm" /> Back to Order Summary
+            </motion.button>
 
-            <button onClick={() => navigate('/order-summary')} className="relative z-20 px-6 py-2.5 bg-white/80 backdrop-blur-md border border-white/60 text-gray-700 rounded-xl font-bold transition-all shadow-sm hover:shadow-md hover:text-red-600 hover:-translate-y-0.5 mb-8 flex items-center gap-2">
-                ← Back to Order
-            </button>
-            
-            <div className="bg-white/70 backdrop-blur-3xl rounded-[2rem] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.1)] border border-white overflow-hidden relative z-20">
-                {!paid ? (
-                    <>
-                        <div className="bg-gradient-to-r from-orange-600 via-red-500 to-red-600 p-8 sm:py-10 relative overflow-hidden text-center flex flex-col items-center">
-                            <div className="absolute inset-0 bg-white/10 mix-blend-overlay"></div>
-                            <h2 className="text-3xl sm:text-4xl font-black text-white relative z-10 drop-shadow-sm inline-block tracking-tight mb-2">
-                                Secure <span className="text-yellow-300">Checkout</span>
-                                <div className="absolute -bottom-2 left-1/4 right-1/4 h-1 bg-white opacity-50 rounded-full mx-auto"></div>
-                            </h2>
-                        </div>
-                        
-                        <div className="p-8 sm:p-10">
-                            <div className="grid gap-5 mb-10">
-                                {paymentOptions.map(option => {
-                                    const Icon = option.icon;
-                                    return (
-                                        <div key={option.id}
-                                            className={`relative p-6 border-2 rounded-2xl cursor-pointer transition-all duration-300 flex items-center gap-5 group overflow-hidden ${
-                                                selected === option.id 
-                                                    ? 'border-transparent shadow-[0_8px_30px_rgb(234,88,12,0.15)] -translate-y-1' 
-                                                    : 'border-transparent bg-white/50 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:bg-white/80'
-                                            }`}
-                                            onClick={() => setSelected(option.id)}>
-                                            
-                                            {selected === option.id && (
-                                                <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-red-50/50 to-orange-100/50 z-0"></div>
-                                            )}
-                                            {selected === option.id && (
-                                                <div className="absolute inset-0 border-2 border-orange-400 rounded-2xl z-10"></div>
-                                            )}
+            <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="bg-white rounded-[3rem] shadow-[0_25px_60px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden relative"
+            >
+                <div className="bg-gradient-to-r from-red-600 to-orange-500 p-10 sm:p-12 text-center relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+                    <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-black/10 rounded-full blur-2xl"></div>
+                    <h2 className="text-4xl sm:text-5xl font-black text-white relative z-10 tracking-tight">Select Payment Method</h2>
+                    <p className="text-white/85 font-semibold text-base sm:text-lg mt-3 relative z-10">Choose how you'd like to pay for your delicious meal</p>
+                </div>
 
-                                            <div className={`w-14 h-14 rounded-xl flex items-center justify-center shrink-0 relative z-20 transition-all ${selected === option.id ? 'bg-gradient-to-br from-orange-500 to-red-500 shadow-lg shadow-orange-500/30' : 'bg-gray-100 group-hover:bg-gray-200'}`}>
-                                                <Icon className={`text-2xl ${selected === option.id ? 'text-white' : 'text-gray-500'}`} />
-                                            </div>
-
-                                            <span className={`text-xl font-bold relative z-20 transition-colors ${selected === option.id ? 'text-gray-900' : 'text-gray-600'}`}>
-                                                {option.name}
-                                            </span>
-                                            {selected === option.id && <FaCheckCircle className="ml-auto text-orange-500 text-2xl relative z-20 animate-bounce" />}
-                                        </div>
-                                    );
-                                })}
+                <div className="p-10 sm:p-14">
+                    {/* Payment Options */}
+                    <div className="grid gap-5 mb-10">
+                        {/* Online Payment */}
+                        <motion.div
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setSelected('online')}
+                            className={`p-8 border-2 rounded-3xl cursor-pointer transition-all flex items-center gap-6 relative overflow-hidden ${
+                                selected === 'online' 
+                                    ? 'border-red-500 bg-gradient-to-br from-red-50/70 to-orange-50/70 shadow-[0_15px_30px_-10px_rgba(239,68,68,0.2)]' 
+                                    : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
+                            }`}
+                        >
+                            <div className={`p-5 rounded-2xl flex items-center justify-center transition-colors ${
+                                selected === 'online' ? 'bg-red-500 text-white shadow-lg' : 'bg-gray-100 text-gray-500'
+                            }`}>
+                                <FaCreditCard className="text-2xl" />
                             </div>
-                            
-                            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 p-6 rounded-2xl mb-8 border border-gray-200/60 shadow-inner">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xl font-bold text-gray-500 uppercase tracking-widest">Total Amount</span>
-                                    <span className="text-4xl font-black text-gray-900 tracking-tight">₹{total}</span>
-                                </div>
+                            <div className="flex-1">
+                                <span className={`text-xl font-black tracking-tight ${selected === 'online' ? 'text-gray-900' : 'text-gray-700'}`}>Pay Online</span>
+                                <p className="text-sm sm:text-base text-gray-500 font-semibold mt-1">UPI, Cards, Net Banking, Wallets via Razorpay</p>
                             </div>
-                            
-                            <button className="w-full relative overflow-hidden group bg-gradient-to-r from-red-600 to-orange-500 text-white py-5 rounded-2xl font-bold text-xl transition-all shadow-[0_8px_25px_-5px_rgba(220,38,38,0.5)] hover:shadow-[0_12px_30px_-5px_rgba(220,38,38,0.6)] hover:-translate-y-1" onClick={handlePay}>
-                                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
-                                <span className="relative z-10 flex flex-col items-center justify-center">
-                                    <span>Proceed to Pay</span>
-                                </span>
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <div className="text-center p-12">
-                        <div className="text-7xl mb-6 text-green-500">
-                            <FaCheckCircle className="inline-block" />
-                        </div>
-                        <h2 className="bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent font-bold text-4xl mb-4">Payment Successful!</h2>
-                        <p className="text-gray-600 text-lg mb-8">Your order has been placed and will be delivered soon.</p>
-                        <button onClick={() => navigate('/')} className="bg-red-600/80 backdrop-blur-sm border border-red-400/50 text-white py-4 px-10 rounded-2xl font-bold hover:bg-red-600 hover:scale-105 transition-all shadow-lg shadow-red-900/30">Back to Home</button>
+                            {selected === 'online' && (
+                                <motion.div 
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    className="text-red-500 bg-white p-1.5 rounded-full shadow-md"
+                                >
+                                    <FaCheckCircle className="text-2xl" />
+                                </motion.div>
+                            )}
+                        </motion.div>
+
+                        {/* COD */}
+                        <motion.div
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setSelected('cod')}
+                            className={`p-8 border-2 rounded-3xl cursor-pointer transition-all flex items-center gap-6 relative overflow-hidden ${
+                                selected === 'cod' 
+                                    ? 'border-emerald-500 bg-gradient-to-br from-emerald-50/70 to-green-50/70 shadow-[0_15px_30px_-10px_rgba(16,185,129,0.2)]' 
+                                    : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
+                            }`}
+                        >
+                            <div className={`p-5 rounded-2xl flex items-center justify-center transition-colors ${
+                                selected === 'cod' ? 'bg-emerald-500 text-white shadow-lg' : 'bg-gray-100 text-gray-500'
+                            }`}>
+                                <FaMoneyBillWave className="text-2xl" />
+                            </div>
+                            <div className="flex-1">
+                                <span className={`text-xl font-black tracking-tight ${selected === 'cod' ? 'text-gray-900' : 'text-gray-700'}`}>Cash on Delivery</span>
+                                <p className="text-sm sm:text-base text-gray-500 font-semibold mt-1">Pay when your order arrives at your door</p>
+                            </div>
+                            {selected === 'cod' && (
+                                <motion.div 
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    className="text-emerald-500 bg-white p-1.5 rounded-full shadow-md"
+                                >
+                                    <FaCheckCircle className="text-2xl" />
+                                </motion.div>
+                            )}
+                        </motion.div>
                     </div>
-                )}
-            </div>
+
+                    {/* Total */}
+                    <div className="bg-[#0B0F19] text-white p-8 rounded-3xl mb-10 flex justify-between items-center relative overflow-hidden shadow-xl">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+                        <div>
+                            <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-gray-400">Total Payable</span>
+                            <h3 className="text-sm sm:text-base font-semibold text-gray-300 mt-1">Including all taxes</h3>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-4xl sm:text-5xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-red-400 to-orange-400">₹{total}</span>
+                        </div>
+                    </div>
+
+                    {/* Proceed Button */}
+                    <motion.button
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleProceed}
+                        className={`w-full py-5 rounded-2xl font-black text-xl text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2.5 mb-6 relative overflow-hidden ${
+                            selected === 'cod' 
+                                ? 'bg-gradient-to-r from-emerald-500 to-green-600 shadow-emerald-500/20' 
+                                : 'bg-gradient-to-r from-red-600 to-orange-500 shadow-red-500/20'
+                        }`}
+                    >
+                        {selected === 'cod' ? (
+                            <>
+                                🛵 Place Order (Cash on Delivery)
+                            </>
+                        ) : (
+                            <>
+                                <FaLock className="text-base opacity-90" /> Pay Securely via Razorpay
+                            </>
+                        )}
+                    </motion.button>
+
+                    <div className="flex items-center justify-center gap-2.5 mt-8 text-gray-400 text-sm font-bold">
+                        <FaShieldAlt className="text-base text-green-500" />
+                        <span>100% SECURE & ENCRYPTED PAYMENTS</span>
+                    </div>
+                </div>
+            </motion.div>
         </div>
     );
 };

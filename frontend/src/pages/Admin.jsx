@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaStar, FaEdit, FaTrash, FaPlus, FaLeaf, FaDrumstickBite, FaImage, FaTimes, FaUtensils, FaShoppingBag, FaCheck, FaBan, FaClock, FaMotorcycle } from 'react-icons/fa';
+import { FaStar, FaEdit, FaTrash, FaPlus, FaLeaf, FaDrumstickBite, FaImage, FaTimes, FaUtensils, FaShoppingBag, FaCheck, FaBan, FaClock, FaMotorcycle, FaTag } from 'react-icons/fa';
 import { API_URL } from '../config';
 
 const Admin = () => {
@@ -27,16 +27,95 @@ const Admin = () => {
     const [accDeliveryTime, setAccDeliveryTime] = useState(30);
     const navigate = useNavigate();
 
+    // Coupons State
+    const [coupons, setCoupons] = useState([]);
+    const [couponsLoading, setCouponsLoading] = useState(false);
+    const [couponCode, setCouponCode] = useState('');
+    const [couponDiscountType, setCouponDiscountType] = useState('percentage');
+    const [couponDiscountValue, setCouponDiscountValue] = useState('');
+    const [couponMinOrder, setCouponMinOrder] = useState('');
+
     useEffect(() => {
         let user = null;
         try { user = JSON.parse(localStorage.getItem('user')); } catch { navigate('/'); return; }
         if (!user || !user.isAdmin) { navigate('/'); return; }
         fetchItems();
         fetchOrders();
+        fetchCoupons();
 
         const interval = setInterval(() => fetchOrders(true), 7000);
         return () => clearInterval(interval);
     }, [navigate]);
+
+    const fetchCoupons = async () => {
+        setCouponsLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/coupons`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setCoupons(Array.isArray(data) ? data : []);
+            }
+        } catch {
+            showStatus('Failed to load coupons', false);
+        }
+        setCouponsLoading(false);
+    };
+
+    const handleCouponSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_URL}/api/coupons`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    code: couponCode,
+                    discountType: couponDiscountType,
+                    discountValue: Number(couponDiscountValue),
+                    minOrderAmount: Number(couponMinOrder) || 0
+                })
+            });
+            if (response.ok) {
+                showStatus('Coupon created successfully!', true);
+                setCouponCode('');
+                setCouponDiscountValue('');
+                setCouponMinOrder('');
+                fetchCoupons();
+            } else {
+                const err = await response.json().catch(() => ({}));
+                showStatus(err.error || 'Failed to create coupon', false);
+            }
+        } catch {
+            showStatus('Failed to create coupon', false);
+        }
+        setLoading(false);
+    };
+
+    const handleCouponDelete = async (id) => {
+        if (!window.confirm('Delete this coupon code?')) return;
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_URL}/api/coupons/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                showStatus('Coupon deleted!', true);
+                fetchCoupons();
+            } else {
+                showStatus('Failed to delete coupon', false);
+            }
+        } catch {
+            showStatus('Failed to delete coupon', false);
+        }
+    };
 
     const fetchOrders = (silent = false) => {
         if (!silent) setOrdersLoading(true);
@@ -217,11 +296,15 @@ const Admin = () => {
                             </span>
                         )}
                     </button>
+                    <button onClick={() => { setActiveTab('coupons'); fetchCoupons(); }}
+                        className={`flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-black tracking-wide transition-all duration-300 ${activeTab === 'coupons' ? 'bg-[#0B0F19] text-white shadow-md shadow-gray-900/20' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}>
+                        <FaTag size={14} className={activeTab === 'coupons' ? 'text-yellow-500' : ''} /> Coupons
+                    </button>
                 </div>
             </div>
 
             <div className="max-w-7xl mx-auto pb-12 flex flex-col lg:flex-row gap-8 items-start relative z-20">
-                {activeTab === 'menu' ? (<>
+                {activeTab === 'menu' && (<>
                 {/* Form Panel */}
                 <div className="w-full lg:w-96 lg:flex-shrink-0 lg:sticky lg:top-32">
                     <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] border border-white overflow-hidden transition-all">
@@ -391,7 +474,8 @@ const Admin = () => {
                         </div>
                     )}
                 </div>
-            </>) : (
+            </>)}
+                {activeTab === 'orders' && (
                 /* Orders Tab */
                 <div className="w-full">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
@@ -437,6 +521,12 @@ const Admin = () => {
                                             <p className="text-xs text-gray-400">{order.address}</p>
                                         </div>
                                         <div className="text-right">
+                                            {order.discountAmount > 0 ? (
+                                                <div className="mb-1">
+                                                    <p className="text-[11px] font-bold text-gray-400 line-through">Subtotal: ₹{order.subtotal || (order.total + order.discountAmount)}</p>
+                                                    <p className="text-[10px] font-black text-green-600">Discount: -₹{order.discountAmount} ({order.couponApplied})</p>
+                                                </div>
+                                            ) : null}
                                             <p className="text-xl font-black text-red-600">₹{order.total}</p>
                                             <p className="text-xs text-gray-400 uppercase">{order.paymentMethod}</p>
                                             <p className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
@@ -516,6 +606,105 @@ const Admin = () => {
                         </div>
                     )}
                 </div>
+            )}
+
+            {activeTab === 'coupons' && (
+                <>
+                    {/* Coupons Form */}
+                    <div className="w-full lg:w-96 lg:flex-shrink-0 lg:sticky lg:top-32">
+                        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] border border-white overflow-hidden transition-all">
+                            <div className="px-8 py-6 border-b border-gray-100 bg-transparent">
+                                <h2 className="text-xl font-black text-gray-900 flex items-center gap-3">
+                                    <span className="w-8 h-8 rounded-xl bg-yellow-100 text-yellow-600 flex items-center justify-center shadow-sm"><FaTag size={14} /></span> Add Coupon
+                                </h2>
+                            </div>
+                            <div className="p-6">
+                                {status.msg && (
+                                    <div className={`mb-4 px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 ${status.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                        <span>{status.ok ? '✓' : '✕'}</span> {status.msg}
+                                    </div>
+                                )}
+                                <form onSubmit={handleCouponSubmit} className="flex flex-col gap-4">
+                                    <input type="text" placeholder="Coupon Code (e.g. OWEN50)" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} required
+                                        className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl text-sm focus:border-orange-400 focus:outline-none bg-gray-50 focus:bg-white transition-all uppercase font-black tracking-wider" />
+                                    
+                                    <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl">
+                                        <button type="button" onClick={() => setCouponDiscountType('percentage')}
+                                            className={`py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${couponDiscountType === 'percentage' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-orange-500'}`}>
+                                            Percent (%)
+                                        </button>
+                                        <button type="button" onClick={() => setCouponDiscountType('flat')}
+                                            className={`py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${couponDiscountType === 'flat' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-orange-500'}`}>
+                                            Flat (₹)
+                                        </button>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 mb-1 block">Discount Value</label>
+                                        <input type="number" placeholder={couponDiscountType === 'percentage' ? 'e.g. 10 for 10% off' : 'e.g. 50 for ₹50 off'} value={couponDiscountValue} onChange={(e) => setCouponDiscountValue(e.target.value)} required min="1"
+                                            className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl text-sm focus:border-orange-400 focus:outline-none bg-gray-50 focus:bg-white transition-all font-bold" />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 mb-1 block">Min Order Amount (₹)</label>
+                                        <input type="number" placeholder="e.g. 150 (0 for no minimum)" value={couponMinOrder} onChange={(e) => setCouponMinOrder(e.target.value)} min="0"
+                                            className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl text-sm focus:border-orange-400 focus:outline-none bg-gray-50 focus:bg-white transition-all font-bold" />
+                                    </div>
+
+                                    <button type="submit" disabled={loading}
+                                        className={`w-full py-3 rounded-xl text-white font-bold text-sm bg-gradient-to-r from-orange-500 to-red-500 hover:shadow-lg hover:-translate-y-0.5 transition-all ${loading ? 'opacity-65 cursor-not-allowed' : ''}`}>
+                                        {loading ? 'Creating...' : 'Create Coupon'}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Coupons List Grid */}
+                    <div className="flex-1 min-w-0 w-full">
+                        <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3 tracking-tight mb-8">
+                            <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-orange-500 text-white flex items-center justify-center shadow-lg"><FaTag size={18} /></span> 
+                            Active Coupons
+                            <span className="text-sm font-bold text-gray-400 bg-white shadow-sm border border-gray-100 px-3 py-1 rounded-lg ml-2">{coupons.length}</span>
+                        </h2>
+
+                        {couponsLoading ? (
+                            <div className="text-center py-20 bg-white/50 backdrop-blur-md rounded-[2rem] border border-white/50 shadow-sm">
+                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-red-200 border-t-red-600 shadow-sm"></div>
+                                <p className="mt-4 font-bold text-gray-500">Fetching coupons...</p>
+                            </div>
+                        ) : coupons.length === 0 ? (
+                            <div className="text-center py-20 bg-white/50 backdrop-blur-md rounded-[2rem] border border-white/50 shadow-sm relative overflow-hidden">
+                                <FaTag size={56} className="mx-auto mb-6 text-gray-300 drop-shadow-sm" />
+                                <p className="text-xl font-black text-gray-500 tracking-tight mb-2">No coupons yet</p>
+                                <p className="text-gray-400 font-medium">Create your first promo code using the form</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {coupons.map(coupon => (
+                                    <div key={coupon._id} className="bg-white rounded-2xl shadow-md p-6 border-2 border-transparent hover:border-yellow-200 transition-all flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex items-center justify-between mb-3">
+                                                <span className="font-black text-lg text-gray-900 bg-gray-100 px-3 py-1 rounded-lg tracking-wider border border-gray-200/50 uppercase">{coupon.code}</span>
+                                                <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold bg-green-500/10 text-green-600 border border-green-500/20`}>
+                                                    Active
+                                                </span>
+                                            </div>
+                                            <div className="space-y-1.5 mb-5 text-sm font-semibold text-gray-600">
+                                                <p>Discount: <span className="font-black text-gray-900">{coupon.discountType === 'percentage' ? `${coupon.discountValue}% Off` : `₹${coupon.discountValue} Off`}</span></p>
+                                                <p>Min Order: <span className="font-black text-gray-900">₹{coupon.minOrderAmount}</span></p>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => handleCouponDelete(coupon._id)}
+                                            className="w-full py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1.5 border border-red-100">
+                                            <FaTrash size={11} /> Delete Coupon
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </>
             )}
             </div>
         </div>
