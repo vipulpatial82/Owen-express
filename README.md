@@ -46,7 +46,7 @@
 
 * **Premium Visual Identity:** Crafted with advanced glassmorphism, subtle neumorphic shadows, dynamic micro-animations, and 3D flip-card menu displays.
 * **Intelligent Cart System:** Persistent, state-managed shopping cart localized to the user's browser, preventing accidental un-checkouts.
-* **Multi-Gateway Payments:** Supports arbitrary checkout modes including Cash on Delivery, UPI, and Credit Cards.
+* **Multi-Gateway Payments:** Fully integrated **Razorpay** payment gateway supporting UPI, Credit/Debit Cards, Net Banking, and Wallets. Also supports Cash on Delivery. Payments are verified server-side using HMAC-SHA256 signature validation.
 * **Real-Time Order Funnel:** Highly accurate timeline generation where administrators lock-in actual prep and delivery ETA's dynamically upon order acceptance.
 * **Role-Based Authorization System:** Rigid architectural separation between end-users and administrators. Admin logic strips all non-managerial bloat (like personal carts and track-order interfaces) to enforce a pure workspace.
 
@@ -116,6 +116,7 @@ A dark-mode, highly specialized workspace completely isolated from regular user 
 | **Database** | MongoDB + Mongoose | flexible document structuring for nested order schemas |
 | **Cloud Storage** | Cloudinary + Multer | Highly optimized, geographically distributed image caching |
 | **Session Tracking** | JSON Web Tokens (JWT) | Stateless REST-compliant user session enforcement |
+| **Payment Gateway** | Razorpay | UPI, Cards, Net Banking, Wallets with server-side signature verification |
 
 ---
 
@@ -151,6 +152,10 @@ PORT=5000
 CLOUDINARY_CLOUD_NAME=your_cloud_identity
 CLOUDINARY_API_KEY=your_issued_api_key
 CLOUDINARY_API_SECRET=your_issued_api_secret
+
+# Razorpay Payment Gateway
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 ```
 Run the server:
 ```bash
